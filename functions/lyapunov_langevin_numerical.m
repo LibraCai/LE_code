@@ -1,4 +1,4 @@
-function [Texp,Lexp]=lyapunov(n,rhs_ext_fcn,fcn_integrator,tstart,stept,tend,ystart,ioutp)
+function Lyp_exp=lyapunov_langevin_numerical(n,f_x,J_x,t_max,ystart,D_diff)
 %
 %    Lyapunov exponent calcullation for ODE-system.
 %
@@ -79,107 +79,102 @@ function [Texp,Lexp]=lyapunov(n,rhs_ext_fcn,fcn_integrator,tstart,stept,tend,yst
 %       n=number of nonlinear odes
 %       n2=n*(n+1)=total number of odes
 %
+% f_x is the right-handed function of the deterministic system
+% J_x is the jacobi matrix of the function f_x
 
+dt = 0.01;
+numTimeSteps = ceil(t_max/dt);
 
-n1=n; n2=n1*(n1+1);%步数
+n1=n; n2=n1*(n1+1); %原系统的维数和增广系统维数
 
-nit = round((tend-tstart)/stept);
-
-% Memory allocation 
-
-y=zeros(n2,1); cum=zeros(n1,1); y0=y;
+Y=zeros(n2,1);
+cum=zeros(n1,1); Y0=Y;
 gsc=cum; znorm=cum;
 
 % Initial values
+Y(1:n1)=ystart(:);
 
-y(1:n)=ystart(:);
+for i=1:n1 
+    Y((n1+1)*i)=1.0; 
+end
 
-for i=1:n1 y((n1+1)*i)=1.0; end
+for n_steps = 1:numTimeSteps
+% 这里专门用小y指代非增广变量，大Y指代的是增广变量
 
-t=tstart;
+%下面的步骤是为了单步更新方程
+dydt = f_x(Y(1:n1));
+dy   = dydt.*dt + D_diff .* (- (1/sqrt(2))*randn(n1,1)*dt + sqrt(dt)*randn(n1,1) );
 
-% Main loop
-
-for ITERLYAP=1:nit
-
-% Solutuion of extended ODE system 
-
-  [T,Y] = feval(fcn_integrator,rhs_ext_fcn,[t t+stept],y);  
-  
-  t=t+stept;
-  y=Y(size(Y,1),:);
-
-  for i=1:n1 
-      for j=1:n1 y0(n1*i+j)=y(n1*j+i); end % 4 7 10 5 8 11  6  9  12
-  end                                      % 4 5  6 7 8 9  10 11  12
-
-%
-%       construct new orthonormal basis by gram-schmidt
-%
-
-  znorm(1)=0.0;
-  for j=1:n1 znorm(1)=znorm(1)+y0(n1*j+1)^2; end
-
-  znorm(1)=sqrt(znorm(1));
-
-  for j=1:n1 y0(n1*j+1)=y0(n1*j+1)/znorm(1); end
-
-  for j=2:n1
-      for k=1:(j-1)
-          gsc(k)=0.0;
-          for l=1:n1 gsc(k)=gsc(k)+y0(n1*l+j)*y0(n1*l+k); end
-      end
- 
-      for k=1:n1
-          for l=1:(j-1)
-              y0(n1*k+j)=y0(n1*k+j)-gsc(l)*y0(n1*k+l);
-          end
-      end
-
-      znorm(j)=0.0;
-      for k=1:n1 znorm(j)=znorm(j)+y0(n1*k+j)^2; end
-      znorm(j)=sqrt(znorm(j));
-
-      for k=1:n1 y0(n1*k+j)=y0(n1*k+j)/znorm(j); end
-  end
-
-%
-%       update running vector magnitudes
-%
-
-  for k=1:n1 cum(k)=cum(k)+log(znorm(k)); end
-
-%
-%       normalize exponent
-%
-
-  for k=1:n1 
-      lp(k)=cum(k)/(t-tstart); 
-  end
-
-% Output modification
-
-  if ITERLYAP==1
-     Lexp=lp;
-     Texp=t;
-  else
-     Lexp=[Lexp; lp];
-     Texp=[Texp; t];
-  end
-
-  if (mod(ITERLYAP,ioutp)==0)
-     %fprintf('t=%6.4f',t);
-     %for k=1:n1 fprintf(' %10.6f,',lp(k)); end;
-     %fprintf('\n');
-  end
-
-  for i=1:n1 
-      for j=1:n1
-          y(n1*j+i)=y0(n1*i+j);
-      end
-  end
+for i = 1:n1
+Y((n1*i+1):(n1*(i+1))) = Y((n1*i+1):(n1*(i+1))) + J_x(Y(1:n1))*Y((n1*i+1):(n1*(i+1)))*dt;
 
 end
+Y(1:n1) = Y(1:n1) + dy;
+%单步更新方程完毕！
+t_current = n_steps*dt;
+
+for i=1:n1 
+      for j=1:n1 
+          Y0(n1*i+j)=Y(n1*j+i); 
+      end % 4 7 10 5 8 11  6  9  12
+end
+
+%下面是施密特正交化
+znorm(1)=0.0;
+for j=1:n1 
+    znorm(1)=znorm(1)+Y0(n1*j+1)^2; 
+end
+
+znorm(1)=sqrt(znorm(1));
+
+for j=1:n1 Y0(n1*j+1)=Y0(n1*j+1)/znorm(1); end
+
+for j=2:n1
+  for k=1:(j-1)
+      gsc(k)=0.0;
+      for l=1:n1 gsc(k)=gsc(k)+Y0(n1*l+j)*Y0(n1*l+k); end
+  end
+
+  for k=1:n1
+      for l=1:(j-1)
+          Y0(n1*k+j)=Y0(n1*k+j)-gsc(l)*Y0(n1*k+l);
+      end
+  end
+
+  znorm(j)=0.0;
+  for k=1:n1 znorm(j)=znorm(j)+Y0(n1*k+j)^2; end
+  znorm(j)=sqrt(znorm(j));
+
+  for k=1:n1 Y0(n1*k+j)=Y0(n1*k+j)/znorm(j); end
+end
+%施密特正交化完毕
+
+% update running vector magnitudes
+for k=1:n1 
+    cum(k)=cum(k)+log(znorm(k)); 
+end
+
+for k=1:n1 
+    lp(k)=cum(k)/t_current; 
+end
+
+%if n_steps==1
+%    Lexp=lp;
+%    Texp=t_current;
+%else
+%    Lexp=[Lexp; lp];
+%    Texp=[Texp; t_current];
+%end
+
+for i=1:n1 
+  for j=1:n1
+      Y(n1*j+i)=Y0(n1*i+j);
+  end
+end
+
+end
+
+Lyp_exp = lp';
 
 end
 
