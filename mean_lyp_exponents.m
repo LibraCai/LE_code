@@ -1,17 +1,15 @@
 clc;clear;close all;
-%result1 is sigma_diff = 0.005
-%result2 is sigma_diff = 0.05
-N_tmaxs = 30;
-T_maxs = linspace(30,300,N_tmaxs);
-
+NNN = 30;
+T_maxs = linspace(30,300,NNN);
+N_tmaxs = length(T_maxs);
 mean_theoretics = [];
 mean_numericals = [];
-y_init = [0.1 0 0.1];
+y_init = [1 0 1];
 ndim = 3;
 for i_tmax = 1:N_tmaxs
 
 %Tra_grid = 80;
-sigma_diff = 0.05;
+sigma_diff = 0.8;
 %sigma_diff = 0.005;
 T_max = T_maxs(i_tmax);
 ndim = 3;
