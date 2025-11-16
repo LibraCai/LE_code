@@ -1,8 +1,8 @@
 clc;clear;close all;
 
 Tra_grid = 80;
-sigma_diff = 0.01;
-T_max = 70;
+sigma_diff = 0.8;
+T_max = 80;
 ndim = 3;
 y_init = [0.1 0 0.1];
 %[~,Res]=lyapunov(ndim,@MyLorenz,@ode45,0,0.01,500,[0 1 0],5);
